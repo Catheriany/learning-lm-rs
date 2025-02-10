@@ -71,25 +71,80 @@ pub fn masked_softmax(y: &mut Tensor<f32>) {
 }
 
 pub fn rms_norm(y: &mut Tensor<f32>, x: &Tensor<f32>, w: &Tensor<f32>, epsilon: f32) {
-    todo!("实现 rms_norm，计算前做一些必要的检查会帮助你后续调试")
+    let x_shape = x.shape();
+    let w_shape = w.shape();
+    assert_eq!(
+        x_shape.last(),
+        w_shape.last(),
+        "w must match the last dimension of x"
+    );
+
+    let dim = *x_shape.last().unwrap(); // 获取最后一维的大小 (D)
+    let batch_size = x_shape[..x_shape.len() - 1].iter().product::<usize>(); // 计算批次大小
+    let x_data = x.data();
+    let y_data = unsafe { y.data_mut() };
+    let w_data = w.data();
+
+    for batch in 0..batch_size {
+        let offset = batch * dim;
+
+        // 计算 RMS 值
+        let rms = (x_data[offset..offset + dim]
+            .iter()
+            .map(|&xi| xi * xi)
+            .sum::<f32>()
+            / dim as f32
+            + epsilon)
+            .sqrt();
+
+        // 归一化并应用权重
+        for i in 0..dim {
+            let x_norm = x_data[offset + i] / rms;
+            y_data[offset + i] = w_data[i] * x_norm;
+        }
+    }
 }
 
 // y = silu(x) * y
 // hint: this is an element-wise operation
 pub fn swiglu(y: &mut Tensor<f32>, x: &Tensor<f32>) {
-    // let len = y.size();
-    // assert!(len == x.size());
+    let len = y.size();
+    assert!(len == x.size());
 
-    // let _y = unsafe { y.data_mut() };
-    // let _x = x.data();
-
-    todo!("实现 silu，这里给了一些前期准备工作的提示，你可以参考")
+    let _y = unsafe { y.data_mut() };
+    let _x = x.data();
+    for i in 0..len {
+        let silu_x = _x[i] / (1.0 + (-_x[i]).exp());
+        _y[i] *= silu_x;
+    }
 }
 
 // C = beta * C + alpha * A @ B^T
 // hint: You don't need to do an explicit transpose of B
 pub fn matmul_transb(c: &mut Tensor<f32>, beta: f32, a: &Tensor<f32>, b: &Tensor<f32>, alpha: f32) {
-    todo!("实现 matmul_transb，计算前做一些必要的检查会帮助你后续调试");
+    let (a_row, a_col) = (a.shape()[0], a.shape()[1]);
+    let (b_row, b_col) = (b.shape()[0], b.shape()[1]);
+    let (c_row, c_col) = (c.shape()[0], c.shape()[1]);
+
+    assert!(a_col == b_col, "Inner dimensions of A and B must match");
+    assert!(
+        a_row == c_row && b_row == c_col,
+        "Output matrix C must have shape (a_row, b_row)"
+    );
+
+    let c_data = unsafe { c.data_mut() };
+    let a_data = a.data();
+    let b_data = b.data();
+
+    for i in 0..c_row {
+        for j in 0..c_col {
+            let mut sum = 0.0;
+            for k in 0..a_col {
+                sum = sum + a_data[i * a_col + k] * b_data[j * b_col + k];
+            }
+            c_data[i * c_col + j] = beta * c_data[i * c_col + j] + alpha * sum;
+        }
+    }
 }
 
 // Dot product of two tensors (treated as vectors)
