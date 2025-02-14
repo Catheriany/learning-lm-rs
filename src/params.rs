@@ -46,54 +46,29 @@ impl LLamaParams<f32> {
             Tensor::new(data, &tensor_view.shape().to_vec())
         };
 
+        let n_layers = config.num_hidden_layers;
+
+        let get_layer_tensors = |prefix: &str| -> Vec<Tensor<f32>> {
+            (0..n_layers)
+                .map(|layer_idx| get_tensor(&format!("model.layers.{layer_idx}.{}", prefix)))
+                .collect()
+        };
+
         LLamaParams {
-            embedding_table: get_tensor("lm_head.weight"),
-
-            rms_att_w: vec![
-                get_tensor("model.layers.0.input_layernorm.weight"),
-                get_tensor("model.layers.1.input_layernorm.weight"),
-            ],
-
-            wq: vec![
-                get_tensor("model.layers.0.self_attn.q_proj.weight"),
-                get_tensor("model.layers.1.self_attn.q_proj.weight"),
-            ],
-
-            wk: vec![
-                get_tensor("model.layers.0.self_attn.k_proj.weight"),
-                get_tensor("model.layers.1.self_attn.k_proj.weight"),
-            ],
-
-            wv: vec![
-                get_tensor("model.layers.0.self_attn.v_proj.weight"),
-                get_tensor("model.layers.1.self_attn.v_proj.weight"),
-            ],
-
-            wo: vec![
-                get_tensor("model.layers.0.self_attn.o_proj.weight"),
-                get_tensor("model.layers.1.self_attn.o_proj.weight"),
-            ],
-
-            rms_ffn_w: vec![
-                get_tensor("model.layers.0.post_attention_layernorm.weight"),
-                get_tensor("model.layers.1.post_attention_layernorm.weight"),
-            ],
-
-            w_up: vec![
-                get_tensor("model.layers.0.mlp.up_proj.weight"),
-                get_tensor("model.layers.1.mlp.up_proj.weight"),
-            ],
-
-            w_gate: vec![
-                get_tensor("model.layers.0.mlp.gate_proj.weight"),
-                get_tensor("model.layers.1.mlp.gate_proj.weight"),
-            ],
-
-            w_down: vec![
-                get_tensor("model.layers.0.mlp.down_proj.weight"),
-                get_tensor("model.layers.1.mlp.down_proj.weight"),
-            ],
-
+            embedding_table: if config.tie_word_embeddings {
+                get_tensor("lm_head.weight")
+            } else {
+                get_tensor("model.embed_tokens.weight")
+            },
+            rms_att_w: get_layer_tensors("input_layernorm.weight"),
+            wq: get_layer_tensors("self_attn.q_proj.weight"),
+            wk: get_layer_tensors("self_attn.k_proj.weight"),
+            wv: get_layer_tensors("self_attn.v_proj.weight"),
+            wo: get_layer_tensors("self_attn.o_proj.weight"),
+            rms_ffn_w: get_layer_tensors("post_attention_layernorm.weight"),
+            w_up: get_layer_tensors("mlp.up_proj.weight"),
+            w_gate: get_layer_tensors("mlp.gate_proj.weight"),
+            w_down: get_layer_tensors("mlp.down_proj.weight"),
             rms_out_w: get_tensor("model.norm.weight"),
             lm_head: get_tensor("lm_head.weight"),
         }
